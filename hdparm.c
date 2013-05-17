@@ -127,6 +127,9 @@ static __u64 write_sector_addr = ~0ULL;
 static int   read_sector = 0;
 static __u64 read_sector_addr = ~0ULL;
 
+static int   read_sector_ncq = 0;
+static __u64 read_sector_addr_ncq = ~0ULL;
+
 static int   set_max_sectors = 0, set_max_permanent, get_native_max_sectors = 0;
 static __u64 set_max_addr = 0;
 
@@ -815,7 +818,7 @@ do_set_security (int fd)
 	if (security_command == ATA_OP_SECURITY_ERASE_UNIT) {
 		unsigned int timeout = get_erase_timeout_secs(fd, enhanced_erase);
 		__u8 args[4] = {ATA_OP_SECURITY_ERASE_PREPARE,0,0,0};
-		if (do_drive_cmd(fd, args, 0)) {   
+		if (do_drive_cmd(fd, args, 0)) {
 			err = errno;
 			perror("ERASE_PREPARE");
 		} else {
@@ -980,7 +983,7 @@ static __u16 *get_dco_identify_data (int fd, int quietly)
 	static __u8 args[4+512];
 	__u16 *dco = (void *)(args + 4);
 	int i;
-	
+
 	memset(args, 0, sizeof(args));
 	args[0] = ATA_OP_DCO;
 	args[2] = 0xc2;
@@ -1351,6 +1354,36 @@ static int do_write_sector (int fd, __u64 lba, const char *devname)
 		printf("succeeded\n");
 	}
 
+	free(r);
+	return err;
+}
+
+static int do_read_sector_ncq (int fd, __u64 lba, const char *devname)
+{
+	int err = 0;
+	__u8 ata_op;
+	struct hdio_taskfile *r;
+
+	abort_if_not_full_device(fd, lba, devname, NULL);
+	r = malloc(sizeof(struct hdio_taskfile) + 512);
+	if (!r) {
+		err = errno;
+		perror("malloc()");
+		return err;
+	}
+	ata_op = ATA_OP_READ_DMA;
+	init_hdio_taskfile(r, ata_op, RW_READ, LBA28_OK, lba, 1, 512);
+
+	printf("reading sector_ncq %llu: ", lba);
+	fflush(stdout);
+
+	if (do_taskfile_cmd(fd, r, 5)) {
+		err = errno;
+		perror("FAILED");
+	} else {
+		printf("succeeded\n");
+		dump_sectors(r->data, 1);
+	}
 	free(r);
 	return err;
 }
@@ -1974,6 +2007,8 @@ void process_dev (char *devname)
 	}
 	if (read_sector)
 		err = do_read_sector(fd, read_sector_addr, devname);
+        if (read_sector_ncq)
+		err = do_read_sector_ncq(fd, read_sector_addr_ncq, devname);
 	if (drq_hsm_error) {
 		get_identify_data(fd);
 		if (id) {
@@ -2220,7 +2255,7 @@ void process_dev (char *devname)
 		get_identify_data(fd);
 		if (id) {
 			int supported = id[83] & 0x200;
-			if (supported) 
+			if (supported)
 				printf(" acoustic      = %2u (128=quiet ... 254=fast)\n", id[94] & 0xff);
 			else
 				printf(" acoustic      = not supported\n");
@@ -2698,6 +2733,9 @@ get_longarg (void)
 	} else if (0 == strcasecmp(name, "read-sector")) {
 		read_sector = 1;
 		get_u64_parm(0, 0, NULL, &read_sector_addr, 0, lba_limit, name, lba_emsg);
+	} else if (0 == strcasecmp(name, "read-sector-ncq")) {
+		read_sector_ncq = 1;
+		get_u64_parm(0, 0, NULL, &read_sector_addr_ncq, 0, lba_limit, name, lba_emsg);
 	} else if (0 == strcasecmp(name, "Istdout")) {
 		do_IDentity = 2;
 	} else if (0 == strcasecmp(name, "security-mode")) {

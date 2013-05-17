@@ -22,6 +22,7 @@ extern int prefer_ata12;
 
 static const unsigned int default_timeout_secs = 15;
 
+
 /*
  * Taskfile layout for SG_ATA_16 cdb:
  *
