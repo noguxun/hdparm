@@ -1371,7 +1371,7 @@ static int do_read_sector_ncq (int fd, __u64 lba, const char *devname)
 		perror("malloc()");
 		return err;
 	}
-	ata_op = ATA_OP_READ_DMA;
+	ata_op = ATA_OP_READ_FPDMA;
 	init_hdio_taskfile(r, ata_op, RW_READ, LBA28_OK, lba, 1, 512);
 
 	printf("reading sector_ncq %llu: ", lba);
@@ -2007,7 +2007,7 @@ void process_dev (char *devname)
 	}
 	if (read_sector)
 		err = do_read_sector(fd, read_sector_addr, devname);
-        if (read_sector_ncq)
+	if (read_sector_ncq)
 		err = do_read_sector_ncq(fd, read_sector_addr_ncq, devname);
 	if (drq_hsm_error) {
 		get_identify_data(fd);
